@@ -1,15 +1,15 @@
 import os
 import subprocess
-import yfinance
 import numpy
 import ccxt
 import matplotlib.pyplot as plt
-##   _____ . _____    |                        ______  ._____
-##   |     | |    \   |       /\     |\    |  /        |
-##   |____ | | __ /   |      /  \    | \   | |         |
-##   |     | |   \    |     /____\   |  \  | |         |_____
-##   |     | |    \   |    /      \  |   \ | |         |
-##   |     | |     \  |__ /        \ |    \|  \______  |_____
+##    _______   _    ____       _          _        ___      _    _______   ______
+##   /_____ /  / / /____ /     / /        / /\     /  /\    / /  /______  //_____/
+##   ||_____  ||| |||   \\\    |||       //\\ \    ||\\ \   ||| //        ||
+##   ||____/  ||| |||__ //|    |||      /// \\ \   |||\\ \  ||| ||        ||______
+##   |||      ||| |||-- \\ \   |||     ///___\\ \  ||| \\ \ ||| ||        ||_____/
+##   |||      ||| |||    \\ \  |||_   //------\\ \ |||  \\ \||| ||______  ||______      
+##   ||/      ||/ ||/     \\/  |/__/ ///       \\ /||/   \\ ||/  \\______/||_____/
 ##   github.com/made-in-abyss
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -40,12 +40,22 @@ close = numpy.array([candles[4] for candles in ohlcv])
 log_hl_ratio = numpy.log(high/low)
 log_return = numpy.log(close[1:]/close[:-1])
 parkinson_variance = (1.0 / (4.0*numpy.log(2))) * (log_hl_ratio**2)
-
-daily_drift = numpy.mean(log_return) * 0.2
+daily_drift = numpy.mean(log_return) * 0.1
 starting_price = close[len(close)-1]
 daily_vol = numpy.sqrt(numpy.mean(parkinson_variance))
-input_data = f"{n} {daily_drift} {daily_vol} {starting_price}"
+w = 5
+smooth = numpy.convolve(parkinson_variance, numpy.ones(w)/w, mode="valid")
+state = smooth > numpy.median(smooth)
+base = numpy.mean(parkinson_variance)
 
+m_calm = numpy.sqrt(numpy.mean(smooth[~state]) / base)
+m_turb = numpy.sqrt(numpy.mean(smooth[state])  / base)
+norm = numpy.sqrt(0.5*(m_calm**2+m_turb**2))
+m_calm, m_turb = m_calm/norm,m_turb/norm
+flips = numpy.sum(state[1:] != state[:-1])
+p_switch = numpy.clip(flips /(len(state) - 1),0.01, 0.10)
+start_turb =int(state[-1])
+input_data = f"{n} {daily_drift} {daily_vol} {starting_price} {m_calm} {m_turb} {p_switch} {start_turb}"
 result = subprocess.run(
     [binary_path],
     input=input_data,
