@@ -4,11 +4,29 @@ import yfinance
 import numpy
 import ccxt
 import matplotlib.pyplot as plt
+##   _____ . _____    |                        ______  ._____
+##   |     | |    \   |       /\     |\    |  /        |
+##   |____ | | __ /   |      /  \    | \   | |         |
+##   |     | |   \    |     /____\   |  \  | |         |_____
+##   |     | |    \   |    /      \  |   \ | |         |
+##   |     | |     \  |__ /        \ |    \|  \______  |_____
+##   github.com/made-in-abyss
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+exe_name = "monte_carlo_engine.exe" if os.name == "nt" else "monte_carlo_engine"
+binary_path = os.path.join(SCRIPT_DIR, exe_name)
+cpp_path = os.path.join(SCRIPT_DIR, "main.cpp")
+if not os.path.exists(binary_path):
+  print("Compiling")
+  subprocess.run(["g++", "-O3", cpp_path, "-o", binary_path], check=True)
+
 lx = []
 ly = []
 exchange = ccxt.binance({
     'enableRateLimit': True
 })
+
+
 HISTORICAL_TIME = 100
 tick_name = str(input("pls input your ticker: "))
 ohlcv = exchange.fetch_ohlcv(tick_name, timeframe='1d', limit=HISTORICAL_TIME)
@@ -28,7 +46,7 @@ daily_vol = numpy.sqrt(numpy.mean(parkinson_variance))
 input_data = f"{daily_drift} {daily_vol} {starting_price}"
 
 result = subprocess.run(
-    ["D:/portfolio/head_rider/monte_carlo_engine.exe"],
+    [binary_path],
     input=input_data,
     text=True,
     capture_output=True,
