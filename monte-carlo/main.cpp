@@ -2,40 +2,43 @@
 
 using namespace std;
 double drift,vol,s0;
-//   _____ . _____    |                        ______  ._____
-//   |     | |    \   |       /\     |\    |  /        |
-//   |____ | | __ /   |      /  \    | \   | |         |
-//   |     | |   \    |     /____\   |  \  | |         |_____
-//   |     | |    \   |    /      \  |   \ | |         |
-//   |     | |     \  |__ /        \ |    \|  \______  |_____
+double m_calm, m_turb, p_switch; int start_turb;
+//    _______   _    ____       _          _        ___      _    _______   ______
+//   /_____ /  / / /____ /     / /        / /\     /  /\    / /  /______  //_____/
+//   ||_____  ||| |||   \\\    |||       //\\ \    ||\\ \   ||| //        ||
+//   ||____/  ||| |||__ //|    |||      /// \\ \   |||\\ \  ||| ||        ||______
+//   |||      ||| |||-- \\ \   |||     ///___\\ \  ||| \\ \ ||| ||        ||_____/
+//   |||      ||| |||    \\ \  |||_   //------\\ \ |||  \\ \||| ||______  ||______      
+//   ||/      ||/ ||/     \\/  |/__/ ///       \\ /||/   \\ ||/  \\______/||_____/
 //   github.com/made-in-abyss
 
 double sim[1005];
+random_device rd;
+mt19937 gen(rd());
+student_t_distribution<double> shock(4.0);
+uniform_real_distribution<double> regime(0.0,1.0);
 void monte(){
-    random_device rd;
-    mt19937 gen(rd());
-    student_t_distribution<double> shock(4.0);
-    uniform_real_distribution<double> regime(0.0,1.0);
     double scale = sqrt((4.0-2.0)/4.0);
     double price = s0;
+    bool turb = start_turb;
     for(int i = 1;i<=1000;i++){
-        if (regime(gen) <= 0.05)drift *= -1;
-        double rate = exp(drift+vol*scale*shock(gen));
-        price*=rate;
+        if (regime(gen) <p_switch) turb = !turb;
+        double m = (turb)? m_turb : m_calm;
+        price *= exp(drift + m*vol*scale*shock(gen));
         sim[i] = price;
     }
 }
 int main()
 {
     int n;
-    cin>>n>>drift>>vol>>s0;
+    cin>>n>>drift>>vol>>s0>>m_calm>>m_turb>>p_switch>>start_turb;
     vector<double>end_price;
     vector<double>draw;
     vector<double>price_step[1005];
     vector<double>one;vector<double>two;vector<double>three;
     for(int i =  1;i<=n;i++){
         monte();
-        double peak = 0.0;
+        double peak = s0;
         double drawdown = 0.0;
         for(int j = 1;j<=1000;j++){
             price_step[j].push_back(sim[j]);
