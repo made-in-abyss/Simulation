@@ -1,0 +1,1700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Realistic Market Microstructure Simulator — Glass Terminal</title>
+  <style>
+    :root {
+      --bg-void: #06080e;
+      --bg-surface: rgba(11, 16, 27, 0.85);
+      --bg-glass: rgba(16, 24, 40, 0.7);
+      --bg-glass-active: rgba(28, 41, 66, 0.85);
+      --border-glass: rgba(255, 255, 255, 0.08);
+      --border-highlight: rgba(59, 130, 246, 0.35);
+      --text-main: #f8fafc;
+      --text-sub: #94a3b8;
+      --text-muted: #475569;
+      --bull: #10b981;
+      --bull-glow: rgba(16, 185, 129, 0.25);
+      --bear: #f43f5e;
+      --bear-glow: rgba(244, 63, 94, 0.25);
+      --accent: #3b82f6;
+      --accent-glow: rgba(59, 130, 246, 0.35);
+      --gold: #f59e0b;
+      --purple: #a855f7;
+      --cyan: #06b6d4;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-void);
+      background-image: 
+        radial-gradient(circle at 10% 10%, rgba(37, 99, 235, 0.08) 0%, transparent 45%),
+        radial-gradient(circle at 90% 90%, rgba(16, 185, 129, 0.06) 0%, transparent 45%);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      font-variant-numeric: tabular-nums;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* GLASSMORPHIC UTILITY */
+    .glass-panel {
+      background: var(--bg-glass);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-glass);
+      border-radius: 8px;
+    }
+
+    /* TOP HEADER */
+    header {
+      background: rgba(9, 13, 22, 0.9);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border-glass);
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      z-index: 30;
+      flex-shrink: 0;
+      flex-wrap: nowrap;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 175px;
+    }
+    .brand-icon {
+      width: 28px; height: 28px;
+      background: linear-gradient(135deg, #2563eb, #10b981);
+      border-radius: 7px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 900; font-size: 14px; color: #fff;
+      box-shadow: 0 0 14px var(--accent-glow);
+    }
+    .brand-text { display: flex; flex-direction: column; }
+    .brand-title { font-size: 13px; font-weight: 700; letter-spacing: 0.5px; color: #fff; }
+    .brand-sub { font-size: 9px; font-weight: 600; text-transform: uppercase; color: #38bdf8; letter-spacing: 0.6px; }
+
+    /* CLOCK DISPLAY */
+    .clock-display {
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid var(--border-glass);
+      border-radius: 6px;
+      padding: 4px 10px;
+      display: flex; align-items: center; gap: 8px;
+      font-family: monospace;
+      font-size: 12px; font-weight: 700;
+      color: #38bdf8;
+      box-shadow: inset 0 1px 4px rgba(0,0,0,0.5);
+    }
+    .clock-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 8px #10b981;
+      animation: pulse 1s infinite alternate;
+    }
+    @keyframes pulse {
+      0% { opacity: 0.4; transform: scale(0.85); }
+      100% { opacity: 1; transform: scale(1.15); }
+    }
+
+    /* ACTION BUTTONS */
+    .action-group {
+      display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+    }
+
+    .btn {
+      background: var(--bg-glass);
+      border: 1px solid var(--border-glass);
+      color: var(--text-main);
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex; align-items: center; gap: 5px;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+    .btn:hover {
+      background: var(--bg-glass-active);
+      border-color: rgba(255,255,255,0.2);
+      transform: translateY(-1px);
+    }
+    .btn:active { transform: translateY(0); }
+    .btn.primary {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      border-color: #3b82f6;
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+    }
+    .btn.primary:hover { box-shadow: 0 4px 14px rgba(59, 130, 246, 0.5); }
+    .btn.success {
+      background: linear-gradient(135deg, #059669, #047857);
+      border-color: #10b981;
+      color: #fff;
+    }
+    .btn.success.active {
+      background: linear-gradient(135deg, #dc2626, #b91c1c);
+      border-color: #ef4444;
+    }
+
+    .seg-group {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--border-glass);
+      border-radius: 6px;
+      display: inline-flex;
+      padding: 2px;
+      gap: 2px;
+    }
+    .seg-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-sub);
+      padding: 3px 7px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.12s ease;
+    }
+    .seg-btn:hover { color: #fff; }
+    .seg-btn.active {
+      background: var(--bg-glass-active);
+      color: #38bdf8;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    }
+
+    /* REGIME PILL */
+    .regime-pill {
+      background: rgba(16, 24, 40, 0.8);
+      border: 1px solid var(--border-glass);
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 10px;
+      font-weight: 700;
+      display: flex; align-items: center; gap: 6px;
+      cursor: pointer;
+      user-select: none;
+      transition: border-color 0.15s ease;
+    }
+    .regime-pill:hover { border-color: rgba(255,255,255,0.25); }
+    .regime-label { color: var(--text-muted); font-size: 9px; }
+    .regime-val { color: #38bdf8; }
+
+    /* SECONDARY TOOLBAR */
+    .toolbar {
+      background: rgba(8, 12, 20, 0.8);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-glass);
+      padding: 4px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+
+    .layer-toggles {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    }
+    .layer-chip {
+      background: rgba(16, 23, 38, 0.5);
+      border: 1px solid var(--border-glass);
+      border-radius: 4px;
+      padding: 2.5px 7px;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: inline-flex; align-items: center; gap: 4px;
+      transition: all 0.12s ease;
+      user-select: none;
+    }
+    .layer-chip.active {
+      background: rgba(30, 41, 59, 0.85);
+      border-color: #3b82f6;
+      color: #fff;
+    }
+
+    .hud-ticker {
+      display: flex; align-items: center; gap: 14px;
+      font-size: 11px;
+    }
+    .hud-val { font-weight: 700; color: #fff; margin-left: 3px; }
+    .hud-val.bull { color: var(--bull); }
+    .hud-val.bear { color: var(--bear); }
+
+    /* MAIN WORKSPACE */
+    .workspace {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      flex: 1;
+      min-height: 0;
+      position: relative;
+    }
+
+    /* CHART VIEWPORT */
+    .chart-panel {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .canvas-wrap {
+      flex: 1;
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+    }
+    #mainCanvas {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      cursor: crosshair;
+    }
+
+    .volume-wrap {
+      height: 95px;
+      position: relative;
+      border-top: 1px solid var(--border-glass);
+      flex-shrink: 0;
+      background: rgba(5, 8, 14, 0.7);
+    }
+    #volCanvas {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    }
+
+    /* REPLAY SCRUBBER BOTTOM BAR */
+    .scrubber-bar {
+      height: 28px;
+      background: rgba(8, 12, 20, 0.9);
+      border-top: 1px solid var(--border-glass);
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+      gap: 12px;
+      flex-shrink: 0;
+      font-size: 10px;
+    }
+    .scrubber-slider {
+      flex: 1;
+      height: 4px;
+      background: #1e293b;
+      border-radius: 2px;
+      outline: none;
+      -webkit-appearance: none;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    /* FLOATING CROSSHAIR HUD */
+    .crosshair-hud {
+      position: absolute;
+      top: 8px; left: 14px;
+      background: rgba(10, 15, 26, 0.88);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--border-glass);
+      border-radius: 6px;
+      padding: 5px 10px;
+      display: flex; align-items: center; gap: 10px;
+      font-size: 10px;
+      pointer-events: none;
+      z-index: 10;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    }
+    .crosshair-hud span { color: var(--text-muted); font-size: 9px; }
+    .crosshair-hud strong { color: #fff; margin-left: 2px; }
+
+    .chart-overlay-controls {
+      position: absolute;
+      bottom: 8px; left: 14px;
+      display: flex; gap: 5px; z-index: 10;
+    }
+    .mini-btn {
+      background: rgba(16, 23, 38, 0.8);
+      border: 1px solid var(--border-glass);
+      color: var(--text-sub);
+      border-radius: 4px; padding: 3px 7px; font-size: 9px; font-weight: 600;
+      cursor: pointer; backdrop-filter: blur(8px);
+    }
+    .mini-btn:hover { color: #fff; background: var(--bg-glass-active); }
+
+    /* SIDEBAR */
+    .sidebar {
+      background: rgba(10, 15, 25, 0.8);
+      backdrop-filter: blur(16px);
+      border-left: 1px solid var(--border-glass);
+      display: flex; flex-direction: column;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-glass) transparent;
+    }
+
+    .sidebar-block {
+      border-bottom: 1px solid var(--border-glass);
+      padding: 10px 14px;
+    }
+    .block-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 8px;
+    }
+    .block-title {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.6px; color: var(--text-sub);
+    }
+
+    /* DOM / ORDER BOOK LADDER */
+    .dom-table {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--border-glass);
+      border-radius: 6px;
+      overflow: hidden;
+      font-family: monospace;
+      font-size: 11px;
+    }
+    .dom-head {
+      display: grid; grid-template-columns: 1fr 1fr;
+      padding: 4px 8px; font-size: 9px; font-weight: 700; color: var(--text-muted);
+      border-bottom: 1px solid var(--border-glass);
+      text-transform: uppercase;
+    }
+    .dom-row {
+      display: grid; grid-template-columns: 1fr 1fr;
+      padding: 2px 8px;
+      position: relative;
+      align-items: center;
+    }
+    .dom-row .bar {
+      position: absolute; top: 0; bottom: 0; right: 0;
+      opacity: 0.22; z-index: 1;
+      transition: width 0.1s ease-out;
+    }
+    .dom-row.ask { color: var(--bear); }
+    .dom-row.ask .bar { background: var(--bear); }
+    .dom-row.bid { color: var(--bull); }
+    .dom-row.bid .bar { background: var(--bull); }
+    .dom-price { z-index: 2; font-weight: 700; }
+    .dom-size { z-index: 2; text-align: right; color: #fff; }
+
+    .dom-spread-badge {
+      background: rgba(16, 23, 38, 0.85);
+      border-top: 1px dashed var(--border-glass);
+      border-bottom: 1px dashed var(--border-glass);
+      padding: 3.5px 8px;
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 10px; font-weight: 700; color: #38bdf8;
+    }
+
+    /* IMBALANCE METER */
+    .imb-container {
+      margin-top: 6px;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border-glass);
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 9px;
+    }
+    .imb-bar-wrap {
+      height: 4px; background: #334155; border-radius: 2px;
+      position: relative; overflow: hidden; margin-top: 3px;
+    }
+    .imb-indicator {
+      position: absolute; top: 0; bottom: 0;
+      transition: all 0.15s ease;
+    }
+
+    /* REAL-TIME EVENT FEED */
+    .event-feed-list {
+      max-height: 130px;
+      overflow-y: auto;
+      display: flex; flex-direction: column; gap: 4px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-glass) transparent;
+    }
+    .event-item {
+      background: rgba(16, 23, 38, 0.55);
+      border: 1px solid var(--border-glass);
+      border-left: 3px solid var(--accent);
+      border-radius: 4px;
+      padding: 3.5px 7px;
+      font-size: 9.5px;
+      display: flex; flex-direction: column; gap: 2px;
+      animation: slideIn 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .event-item.bull { border-left-color: var(--bull); }
+    .event-item.bear { border-left-color: var(--bear); }
+    .event-item.gold { border-left-color: var(--gold); }
+    .event-item.purple { border-left-color: var(--purple); }
+
+    .event-head { display: flex; justify-content: space-between; align-items: center; }
+    .event-title { font-weight: 700; color: #fff; }
+    .event-time { color: var(--text-muted); font-family: monospace; font-size: 8.5px; }
+    .event-detail { color: var(--text-sub); font-size: 8.5px; }
+
+    /* STATS GRID */
+    .stats-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 5px;
+    }
+    .stat-card {
+      background: rgba(16, 23, 38, 0.55);
+      border: 1px solid var(--border-glass);
+      border-radius: 5px;
+      padding: 5px 7px;
+    }
+    .stat-label { font-size: 8.5px; color: var(--text-muted); font-weight: 500; }
+    .stat-val { font-size: 11px; font-weight: 700; color: #fff; margin-top: 2px; }
+
+    /* SLIDING SETTINGS DRAWER */
+    .drawer {
+      position: fixed;
+      top: 0; right: -380px; width: 360px; height: 100vh;
+      background: rgba(10, 15, 26, 0.96);
+      backdrop-filter: blur(24px);
+      border-left: 1px solid var(--border-glass);
+      box-shadow: -8px 0 32px rgba(0, 0, 0, 0.7);
+      z-index: 100;
+      transition: right 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex; flex-direction: column;
+      padding: 18px;
+      overflow-y: auto;
+    }
+    .drawer.open { right: 0; }
+    .drawer-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 16px; border-bottom: 1px solid var(--border-glass);
+      padding-bottom: 10px;
+    }
+    .drawer-title { font-size: 13px; font-weight: 700; color: #fff; }
+    .close-btn { background: none; border: none; color: var(--text-sub); font-size: 18px; cursor: pointer; }
+
+    .control-row { margin-bottom: 12px; }
+    .control-label {
+      display: flex; justify-content: space-between; font-size: 10.5px;
+      color: var(--text-sub); margin-bottom: 4px;
+    }
+    .control-slider {
+      width: 100%; height: 4px; background: #1e293b; border-radius: 2px;
+      outline: none; -webkit-appearance: none; accent-color: var(--accent);
+    }
+    .control-select, .control-input {
+      width: 100%; background: rgba(16, 23, 38, 0.85);
+      border: 1px solid var(--border-glass); border-radius: 5px;
+      color: #fff; padding: 5px 8px; font-size: 11px; outline: none;
+    }
+
+    .preset-btn-group {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 14px;
+    }
+    .preset-btn {
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid var(--border-glass);
+      color: var(--text-sub); border-radius: 4px; padding: 5px; font-size: 9.5px;
+      cursor: pointer; text-align: center;
+    }
+    .preset-btn:hover { background: rgba(59, 130, 246, 0.2); color: #fff; border-color: #3b82f6; }
+
+    .dur-chip {
+      flex: 1;
+      background: rgba(30, 41, 59, 0.5);
+      border: 1px solid var(--border-glass);
+      border-radius: 4px;
+      color: var(--text-sub);
+      padding: 3.5px 0;
+      font-size: 9.5px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.12s ease;
+    }
+    .dur-chip:hover { color: #fff; background: rgba(59, 130, 246, 0.25); border-color: #3b82f6; }
+    .dur-chip.active {
+      background: var(--bg-glass-active);
+      color: #38bdf8;
+      border-color: #38bdf8;
+      font-weight: 700;
+    }
+    .seg-btn[data-speed="500.0"] {
+      color: #f59e0b;
+    }
+    .seg-btn[data-speed="500.0"].active {
+      background: rgba(245, 158, 11, 0.25);
+      color: #fbbf24;
+      border: 1px solid #f59e0b;
+      box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon">L</div>
+      <div class="brand-text">
+        <span class="brand-title">LOB TERMINAL</span>
+        <span class="brand-sub">MICROSTRUCTURE SIM</span>
+      </div>
+    </div>
+
+    <!-- CLOCK DISPLAY -->
+    <div class="clock-display">
+      <div class="clock-dot"></div>
+      <span id="txtClock">09:30:00</span>
+      <span style="font-size: 9px; color: var(--text-muted); margin-left: 2px;" id="txtSimSpeed">1x</span>
+    </div>
+
+    <!-- HIDDEN REGIME PILL -->
+    <div class="regime-pill" id="btnToggleRegime" title="Click to toggle hidden regime visibility">
+      <span class="regime-label">REGIME:</span>
+      <span class="regime-val" id="pillRegime">HIDDEN 👁️</span>
+    </div>
+
+    <!-- TRANSPORT CONTROLS -->
+    <div class="action-group">
+      <button id="btnPlayPause" class="btn success" title="Play / Pause simulation (Spacebar)">
+        <span id="playIcon">▶</span>
+        <span id="playText">Play</span>
+      </button>
+
+      <button id="btnStep" class="btn" title="Step 1 second (Right Arrow)">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+        Step
+      </button>
+
+      <button id="btnRerun" class="btn primary" title="Rerun with current seed">Rerun</button>
+      <button id="btnNewMarket" class="btn" title="Randomize market seed">New Market</button>
+      <button id="btnOpenSettings" class="btn" title="Configure simulation parameters">Settings ⚙</button>
+    </div>
+
+    <!-- SPEED SELECTOR (0.25x to 100x) -->
+    <div class="action-group">
+      <div class="seg-group" id="speedGroup">
+        <button class="seg-btn" data-speed="0.5">0.5x</button>
+        <button class="seg-btn active" data-speed="1.0">1x</button>
+        <button class="seg-btn" data-speed="2.0">2x</button>
+        <button class="seg-btn" data-speed="5.0">5x</button>
+        <button class="seg-btn" data-speed="10.0">10x</button>
+        <button class="seg-btn" data-speed="25.0">25x</button>
+        <button class="seg-btn" data-speed="50.0">50x</button>
+        <button class="seg-btn" data-speed="100.0">100x</button>
+        <button class="seg-btn" data-speed="250.0">250x</button>
+        <button class="seg-btn" data-speed="500.0" title="500x Turbo speed">500x ⚡</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- SECONDARY TOOLBAR -->
+  <div class="toolbar">
+    <!-- LAYER TOGGLES -->
+    <div class="layer-toggles">
+      <span style="color: var(--text-muted); font-size: 9.5px; font-weight: 700; margin-right: 2px;">LAYERS:</span>
+      <div class="layer-chip active" data-layer="candles">☑ Candles</div>
+      <div class="layer-chip active" data-layer="volume">☑ Volume</div>
+      <div class="layer-chip active" data-layer="fvg">☑ FVG</div>
+      <div class="layer-chip active" data-layer="liquidity">☑ Liquidity</div>
+      <div class="layer-chip active" data-layer="structure">☑ Structure</div>
+      <div class="layer-chip active" data-layer="sweeps">☑ Sweeps</div>
+    </div>
+
+    <!-- REAL-TIME TICKER -->
+    <div class="hud-ticker">
+      <div><span style="color:var(--text-muted);">PRICE</span><span id="tkPrice" class="hud-val">100.00</span></div>
+      <div><span style="color:var(--text-muted);">SPREAD</span><span id="tkSpread" class="hud-val">0.02</span></div>
+      <div><span style="color:var(--text-muted);">DELTA</span><span id="tkDelta" class="hud-val bull">+0.0</span></div>
+      <div><span style="color:var(--text-muted);">VOL</span><span id="tkVol" class="hud-val">0</span></div>
+      <div><span style="color:var(--text-muted);">BAR #</span><span id="tkBar" class="hud-val">#00</span></div>
+    </div>
+  </div>
+
+  <!-- MAIN WORKSPACE -->
+  <div class="workspace">
+    <!-- CHART PANEL -->
+    <div class="chart-panel">
+      <!-- Crosshair HUD -->
+      <div class="crosshair-hud" id="crosshairHud">
+        <div><span>TIME</span> <strong id="hudTime">--</strong></div>
+        <div><span>O</span> <strong id="hudO">--</strong></div>
+        <div><span>H</span> <strong id="hudH">--</strong></div>
+        <div><span>L</span> <strong id="hudL">--</strong></div>
+        <div><span>C</span> <strong id="hudC">--</strong></div>
+        <div><span>VOL</span> <strong id="hudBarVol">--</strong></div>
+        <div><span>DELTA</span> <strong id="hudBarDelta">--</strong></div>
+      </div>
+
+      <div class="canvas-wrap" id="canvasWrap">
+        <canvas id="mainCanvas"></canvas>
+      </div>
+
+      <div class="volume-wrap" id="volWrap">
+        <canvas id="volCanvas"></canvas>
+      </div>
+
+      <!-- REPLAY SCRUBBER -->
+      <div class="scrubber-bar">
+        <span style="color:var(--text-muted); font-weight:700;">REPLAY TIMELINE:</span>
+        <input type="range" class="scrubber-slider" id="timelineScrubber" min="0" max="0" value="0" />
+        <span id="txtScrubTime" style="color:#38bdf8; font-family:monospace; min-width:55px;">09:30:00</span>
+      </div>
+
+      <div class="chart-overlay-controls">
+        <button class="mini-btn" id="btnFit">Auto Fit</button>
+        <button class="mini-btn" id="btnZoomIn">Zoom +</button>
+        <button class="mini-btn" id="btnZoomOut">Zoom -</button>
+        <button class="mini-btn" id="btnResetView">Reset View</button>
+      </div>
+    </div>
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <!-- DOM / ORDER BOOK LADDER -->
+      <div class="sidebar-block">
+        <div class="block-header">
+          <span class="block-title">Limit Order Book Depth</span>
+          <span id="domSpreadBadge" style="font-size: 10px; font-weight: 700; color: #38bdf8;">SPREAD: 0.02 (2 ticks)</span>
+        </div>
+        <div class="dom-table">
+          <div class="dom-head">
+            <span>Price</span>
+            <span style="text-align: right;">Depth</span>
+          </div>
+          <div id="domAsks"></div>
+          <div class="dom-spread-badge">
+            <span id="domMid">MID: 100.00</span>
+            <span id="domLastTrade">LAST: 100.00</span>
+          </div>
+          <div id="domBids"></div>
+        </div>
+
+        <!-- Order Book Imbalance Gauge -->
+        <div class="imb-container">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="color:var(--text-muted);">BOOK IMBALANCE</span>
+            <span id="txtImbalance" style="font-weight:700; color:#10b981;">0.00</span>
+          </div>
+          <div class="imb-bar-wrap">
+            <div id="imbIndicator" class="imb-indicator" style="background:#3b82f6; left:50%; width:0%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- REAL-TIME EVENT FEED -->
+      <div class="sidebar-block">
+        <div class="block-header">
+          <span class="block-title">Live Microstructure Events</span>
+          <span style="font-size: 9px; color: var(--text-muted);" id="eventCount">0 events</span>
+        </div>
+        <div class="event-feed-list" id="eventList">
+          <div class="event-item neutral">
+            <div class="event-head"><span class="event-title">Market Initialized</span><span class="event-time">09:30:00</span></div>
+            <div class="event-detail">Limit order book seeded around 100.00</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MARKET STATISTICS -->
+      <div class="sidebar-block">
+        <div class="block-header">
+          <span class="block-title">Emergent Analytics</span>
+          <span id="txtActiveCandles" style="font-size: 9px; color: var(--text-muted);">0 candles</span>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Total Return</div>
+            <div class="stat-val" id="stReturn">0.00%</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Max Drawdown</div>
+            <div class="stat-val" id="stDrawdown">0.00%</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Annualized Vol</div>
+            <div class="stat-val" id="stVol">0.00%</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Current Regime</div>
+            <div class="stat-val" id="stRegime"><span style="color:var(--text-muted); font-size:10px;">HIDDEN</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">BOS / CHoCH</div>
+            <div class="stat-val" id="stBreaks">0 / 0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">FVGs (Active / Tot)</div>
+            <div class="stat-val" id="stFVGs">0 / 0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Sweeps (Rev / Cont)</div>
+            <div class="stat-val" id="stSweeps">0 / 0</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Trades</div>
+            <div class="stat-val" id="stTrades">0</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SLIDING SETTINGS DRAWER -->
+  <div class="drawer" id="settingsDrawer">
+    <div class="drawer-header">
+      <span class="drawer-title">Simulation Parameters</span>
+      <button class="close-btn" id="btnCloseSettings">✕</button>
+    </div>
+
+    <!-- PRESETS -->
+    <div style="font-size: 10px; font-weight:700; color:var(--text-muted); margin-bottom:6px; text-transform:uppercase;">
+      Quick Scenarios
+    </div>
+    <div class="preset-btn-group">
+      <button class="preset-btn" id="btnPresetNormal">Normal Balanced</button>
+      <button class="preset-btn" id="btnPresetBull">Bullish Momentum</button>
+      <button class="preset-btn" id="btnPresetVol">High Volatility</button>
+      <button class="preset-btn" id="btnPresetSweep">Liquidity Sweeps</button>
+    </div>
+
+    <div class="control-row">
+      <div class="control-label"><span>Starting Price ($)</span></div>
+      <input type="number" class="control-input" id="cfgPrice" value="100.0" step="1.0" />
+    </div>
+
+    <div class="control-row">
+      <div class="control-label"><span>Candle Timeframe</span></div>
+      <select class="control-select" id="cfgTimeframe">
+        <option value="15">15 Seconds</option>
+        <option value="30">30 Seconds</option>
+        <option value="60" selected>1 Minute (60 Ticks)</option>
+        <option value="300">5 Minutes (300 Ticks)</option>
+      </select>
+    </div>
+
+    <div class="control-row" style="margin-bottom: 6px;">
+      <div class="control-label"><span>Simulation Duration</span><strong id="lblDuration" style="color:#38bdf8;">30 Mins (1800s)</strong></div>
+      <input type="range" class="control-slider" id="slDuration" min="60" max="14400" step="60" value="1800" />
+    </div>
+
+    <!-- Quick Duration Buttons -->
+    <div style="display: flex; gap: 4px; margin-bottom: 10px;">
+      <button class="dur-chip" data-ticks="600">10m</button>
+      <button class="dur-chip active" data-ticks="1800">30m</button>
+      <button class="dur-chip" data-ticks="3600">1h</button>
+      <button class="dur-chip" data-ticks="7200">2h</button>
+      <button class="dur-chip" data-ticks="14400">4h</button>
+      <button class="dur-chip" data-ticks="28800">8h</button>
+    </div>
+
+    <!-- Dedicated Custom Duration Input -->
+    <div style="background: rgba(0, 0, 0, 0.35); border: 1px solid var(--border-glass); border-radius: 6px; padding: 8px 10px; margin-bottom: 14px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <span style="font-size: 10px; font-weight: 700; color: #fff;">Custom Duration</span>
+        <span style="font-size: 8.5px; color: var(--text-muted);">Exact ticks / minutes</span>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <div style="flex: 1;">
+          <div style="font-size: 8.5px; color: var(--text-muted); margin-bottom: 2px;">TICKS (SECONDS)</div>
+          <input type="number" class="control-input" id="cfgCustomTicks" min="10" max="500000" step="10" value="1800" placeholder="e.g. 5000" style="width: 100%; font-family: monospace; font-weight: 700; color: #38bdf8;" />
+        </div>
+        <div style="font-size: 12px; color: var(--text-muted); padding-top: 12px;">=</div>
+        <div style="flex: 1;">
+          <div style="font-size: 8.5px; color: var(--text-muted); margin-bottom: 2px;">MINUTES</div>
+          <input type="number" class="control-input" id="cfgCustomMins" min="0.2" max="8333" step="0.5" value="30.0" placeholder="e.g. 90" style="width: 100%; font-family: monospace;" />
+        </div>
+      </div>
+      <div style="font-size: 8.5px; color: var(--text-muted); margin-top: 5px;">
+        💡 Type any custom tick count (e.g. 500, 3,000, 20,000, 50,000). Syncs dynamically with slider & engine.
+      </div>
+    </div>
+
+    <div class="control-row">
+      <div class="control-label"><span>Random Seed</span></div>
+      <input type="number" class="control-input" id="cfgSeed" value="12345" />
+    </div>
+
+    <div class="control-row">
+      <div class="control-label"><span>Volatility Scale</span><strong id="lblVol">1.0x</strong></div>
+      <input type="range" class="control-slider" id="slVol" min="0.2" max="3.0" step="0.1" value="1.0" />
+    </div>
+
+    <div class="control-row">
+      <div class="control-label"><span>Market Maker Depth</span><strong id="lblMM">1.0x</strong></div>
+      <input type="range" class="control-slider" id="slMM" min="0.2" max="3.0" step="0.1" value="1.0" />
+    </div>
+
+    <div class="control-row">
+      <div class="control-label"><span>Institutional Flow</span><strong id="lblInst">1.0x</strong></div>
+      <input type="range" class="control-slider" id="slInst" min="0.1" max="4.0" step="0.1" value="1.0" />
+    </div>
+
+    <div class="control-row">
+      <div class="control-label"><span>Swing Detection Window</span></div>
+      <select class="control-select" id="cfgSwing">
+        <option value="2" selected>2 Bars (Sensitive)</option>
+        <option value="3">3 Bars (Standard)</option>
+        <option value="5">5 Bars (Major Swings)</option>
+      </select>
+    </div>
+
+    <div style="margin-top: 24px; display: flex; gap: 8px;">
+      <button class="btn primary" id="btnApplySettings" style="flex:1;">Apply & Restart</button>
+      <button class="btn" id="btnCancelSettings">Cancel</button>
+    </div>
+  </div>
+
+  <script>
+    // SIMULATION STATE
+    let simData = null;
+    let isPlaying = false;
+    let playSpeed = 1.0;
+    let isRegimeRevealed = false;
+    let playTimer = null;
+    let isFetching = false;
+
+    // ACTIVE CHART LAYERS
+    const activeLayers = {
+      candles: true,
+      volume: true,
+      fvg: true,
+      liquidity: true,
+      structure: true,
+      sweeps: true
+    };
+
+    // PAN & ZOOM STATE
+    let zoomLevel = 1.0;
+    let panOffset = 0;
+    let isDragging = false;
+    let dragStartX = 0;
+    let hoverMouseX = -1;
+    let hoverMouseY = -1;
+
+    // CANVASES & CONTEXTS
+    const mainCanvas = document.getElementById("mainCanvas");
+    const volCanvas = document.getElementById("volCanvas");
+    const mCtx = mainCanvas.getContext("2d");
+    const vCtx = volCanvas.getContext("2d");
+
+    // RESIZE OBSERVER WITH HIGH-DPI SCALING
+    function updateCanvasSize() {
+      const dpr = window.devicePixelRatio || 1;
+      const mWrap = document.getElementById("canvasWrap");
+      const vWrap = document.getElementById("volWrap");
+
+      const mw = mWrap.clientWidth;
+      const mh = mWrap.clientHeight;
+      const vw = vWrap.clientWidth;
+      const vh = vWrap.clientHeight;
+
+      if (mw <= 0 || mh <= 0) return;
+
+      mainCanvas.width = Math.floor(mw * dpr);
+      mainCanvas.height = Math.floor(mh * dpr);
+      mainCanvas.style.width = mw + "px";
+      mainCanvas.style.height = mh + "px";
+      mCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      volCanvas.width = Math.floor(vw * dpr);
+      volCanvas.height = Math.floor(vh * dpr);
+      volCanvas.style.width = vw + "px";
+      volCanvas.style.height = vh + "px";
+      vCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      render();
+    }
+
+    const resizeObserver = new ResizeObserver(() => updateCanvasSize());
+    resizeObserver.observe(document.getElementById("canvasWrap"));
+    resizeObserver.observe(document.getElementById("volWrap"));
+    window.addEventListener("resize", updateCanvasSize);
+
+    // API CALLS
+    async function initSim() {
+      if (isPlaying) togglePlay();
+      const customTicks = parseInt(document.getElementById("cfgCustomTicks")?.value);
+      const sliderTicks = parseInt(document.getElementById("slDuration")?.value);
+      const totalTicks = (!isNaN(customTicks) && customTicks > 0) ? customTicks : (sliderTicks || 1800);
+
+      const payload = {
+        initial_price: parseFloat(document.getElementById("cfgPrice").value),
+        ticks_per_candle: parseInt(document.getElementById("cfgTimeframe").value),
+        seed: parseInt(document.getElementById("cfgSeed").value),
+        volatility_scale: parseFloat(document.getElementById("slVol").value),
+        mm_activity: parseFloat(document.getElementById("slMM").value),
+        institutional_frequency: parseFloat(document.getElementById("slInst").value),
+        swing_window: parseInt(document.getElementById("cfgSwing").value),
+        total_ticks: totalTicks,
+        initial_liquidity_size: 45.0,
+        min_fvg_size: 0.01
+      };
+      const res = await fetch("/api/init", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      simData = data.state;
+      updateScrubberBounds();
+      updateUI();
+      render();
+    }
+
+    async function stepSim(n = 1) {
+      if (isFetching) return;
+      isFetching = true;
+      try {
+        const res = await fetch(`/api/step?steps=${n}`, { method: "POST" });
+        const data = await res.json();
+        simData = data.state;
+        updateScrubberBounds();
+        updateUI();
+        render();
+        if (data.is_finished && isPlaying) togglePlay();
+      } catch (err) {
+        console.error("Step error:", err);
+      } finally {
+        isFetching = false;
+      }
+    }
+
+    // PLAYBACK LOOP WITH STEADY CADENCE
+    function togglePlay() {
+      isPlaying = !isPlaying;
+      document.getElementById("playText").textContent = isPlaying ? "Pause" : "Play";
+      document.getElementById("playIcon").textContent = isPlaying ? "⏸" : "▶";
+      document.getElementById("btnPlayPause").classList.toggle("active", isPlaying);
+
+      if (isPlaying) {
+        startPlayLoop();
+      } else {
+        clearInterval(playTimer);
+      }
+    }
+
+    function startPlayLoop() {
+      clearInterval(playTimer);
+      if (!isPlaying) return;
+
+      // 1x = 1000ms per tick, 2x = 500ms, 5x = 200ms
+      // For higher speeds (>10x), batch steps at a fixed 60-70ms interval to maintain smooth 60 FPS
+      if (playSpeed <= 5.0) {
+        const interval = Math.max(60, Math.floor(1000 / playSpeed));
+        playTimer = setInterval(() => stepSim(1), interval);
+      } else if (playSpeed <= 25.0) {
+        const batch = Math.ceil(playSpeed / 10);
+        playTimer = setInterval(() => stepSim(batch), 90);
+      } else if (playSpeed <= 100.0) {
+        const batch = Math.ceil(playSpeed / 14);
+        playTimer = setInterval(() => stepSim(batch), 70);
+      } else {
+        // High speeds: 250x, 500x
+        // At 500x, target 500 ticks/sec:
+        // Batch 35 ticks every 70ms (35 / 0.070 = 500 ticks/sec!)
+        const batch = Math.ceil((playSpeed * 70) / 1000);
+        playTimer = setInterval(() => stepSim(batch), 70);
+      }
+    }
+
+    // BUTTON EVENT HANDLERS
+    document.getElementById("btnPlayPause").onclick = togglePlay;
+    document.getElementById("btnStep").onclick = () => stepSim(1);
+    document.getElementById("btnRerun").onclick = () => initSim();
+    document.getElementById("btnNewMarket").onclick = () => {
+      document.getElementById("cfgSeed").value = Math.floor(Math.random() * 90000) + 10000;
+      initSim();
+    };
+
+    // KEYBOARD SHORTCUTS
+    window.addEventListener("keydown", (e) => {
+      if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+      if (e.code === "Space") {
+        e.preventDefault();
+        togglePlay();
+      } else if (e.code === "ArrowRight") {
+        e.preventDefault();
+        stepSim(1);
+      }
+    });
+
+    // SPEED SELECTOR
+    document.querySelectorAll("#speedGroup .seg-btn").forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll("#speedGroup .seg-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        playSpeed = parseFloat(btn.dataset.speed);
+        document.getElementById("txtSimSpeed").textContent = playSpeed + "x";
+        if (isPlaying) startPlayLoop();
+      };
+    });
+
+    // LAYER TOGGLES
+    document.querySelectorAll(".layer-chip").forEach(chip => {
+      chip.onclick = () => {
+        const layer = chip.dataset.layer;
+        activeLayers[layer] = !activeLayers[layer];
+        chip.classList.toggle("active", activeLayers[layer]);
+        chip.textContent = (activeLayers[layer] ? "☑ " : "☐ ") + layer.charAt(0).toUpperCase() + layer.slice(1);
+        render();
+      };
+    });
+
+    // SETTINGS DRAWER & PRESETS
+    const drawer = document.getElementById("settingsDrawer");
+    document.getElementById("btnOpenSettings").onclick = () => drawer.classList.add("open");
+    document.getElementById("btnCloseSettings").onclick = () => drawer.classList.remove("open");
+    document.getElementById("btnCancelSettings").onclick = () => drawer.classList.remove("open");
+    document.getElementById("btnApplySettings").onclick = () => {
+      drawer.classList.remove("open");
+      initSim();
+    };
+
+    function formatDuration(ticks) {
+      const mins = Math.round(ticks / 60);
+      if (mins < 60) return `${mins} Mins (${ticks}s)`;
+      const hrs = (mins / 60).toFixed(1);
+      return `${hrs} Hrs (${ticks}s)`;
+    }
+
+    function setSimulationDuration(ticks, source = "all") {
+      ticks = Math.max(10, Math.round(ticks));
+      const mins = (ticks / 60).toFixed(1);
+
+      const sl = document.getElementById("slDuration");
+      const cTicks = document.getElementById("cfgCustomTicks");
+      const cMins = document.getElementById("cfgCustomMins");
+      const lbl = document.getElementById("lblDuration");
+
+      if (source !== "slider" && sl) {
+        if (ticks > parseInt(sl.max)) {
+          sl.max = Math.max(ticks, 28800);
+        }
+        sl.value = Math.min(ticks, parseInt(sl.max));
+      }
+      if (source !== "ticks" && cTicks) {
+        cTicks.value = ticks;
+      }
+      if (source !== "mins" && cMins) {
+        cMins.value = mins;
+      }
+      if (lbl) {
+        lbl.textContent = formatDuration(ticks);
+      }
+
+      // Update active state of dur-chips
+      document.querySelectorAll(".dur-chip").forEach(chip => {
+        const chipVal = parseInt(chip.dataset.ticks);
+        chip.classList.toggle("active", chipVal === ticks);
+      });
+    }
+
+    // Quick Duration Chips
+    document.querySelectorAll(".dur-chip").forEach(chip => {
+      chip.onclick = () => {
+        const t = parseInt(chip.dataset.ticks);
+        setSimulationDuration(t);
+      };
+    });
+
+    // Custom Duration Inputs Two-Way Sync
+    const customTicksEl = document.getElementById("cfgCustomTicks");
+    if (customTicksEl) {
+      customTicksEl.oninput = () => {
+        const val = parseInt(customTicksEl.value);
+        if (!isNaN(val) && val > 0) {
+          setSimulationDuration(val, "ticks");
+        }
+      };
+    }
+
+    const customMinsEl = document.getElementById("cfgCustomMins");
+    if (customMinsEl) {
+      customMinsEl.oninput = () => {
+        const mins = parseFloat(customMinsEl.value);
+        if (!isNaN(mins) && mins > 0) {
+          setSimulationDuration(mins * 60, "mins");
+        }
+      };
+    }
+
+    const durSlider = document.getElementById("slDuration");
+    if (durSlider) {
+      durSlider.oninput = () => {
+        setSimulationDuration(parseInt(durSlider.value), "slider");
+      };
+    }
+
+    document.getElementById("btnPresetNormal").onclick = () => {
+      document.getElementById("slVol").value = "1.0";
+      document.getElementById("slMM").value = "1.0";
+      document.getElementById("slInst").value = "1.0";
+      setSimulationDuration(1800);
+      updateSliderLabels();
+    };
+    document.getElementById("btnPresetBull").onclick = () => {
+      document.getElementById("slVol").value = "1.5";
+      document.getElementById("slMM").value = "0.9";
+      document.getElementById("slInst").value = "2.2";
+      setSimulationDuration(2400);
+      updateSliderLabels();
+    };
+    document.getElementById("btnPresetVol").onclick = () => {
+      document.getElementById("slVol").value = "2.4";
+      document.getElementById("slMM").value = "0.6";
+      document.getElementById("slInst").value = "2.5";
+      setSimulationDuration(1800);
+      updateSliderLabels();
+    };
+    document.getElementById("btnPresetSweep").onclick = () => {
+      document.getElementById("slVol").value = "1.2";
+      document.getElementById("slMM").value = "1.2";
+      document.getElementById("slInst").value = "1.4";
+      setSimulationDuration(3600);
+      updateSliderLabels();
+    };
+
+    function updateSliderLabels() {
+      ["slVol", "slMM", "slInst"].forEach(id => {
+        document.getElementById("lbl" + id.slice(2)).textContent = document.getElementById(id).value + "x";
+      });
+      const durEl = document.getElementById("slDuration");
+      if (durEl) {
+        document.getElementById("lblDuration").textContent = formatDuration(parseInt(durEl.value));
+      }
+    }
+    ["slVol", "slMM", "slInst"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.oninput = updateSliderLabels;
+    });
+
+    // REVEAL REGIME PILL
+    function toggleRegimeVisibility() {
+      isRegimeRevealed = !isRegimeRevealed;
+      updateRegime();
+    }
+    document.getElementById("btnToggleRegime").onclick = toggleRegimeVisibility;
+
+    // ZOOM & PAN BUTTONS
+    document.getElementById("btnFit").onclick = () => { zoomLevel = 1.0; panOffset = 0; render(); };
+    document.getElementById("btnResetView").onclick = () => { zoomLevel = 1.0; panOffset = 0; render(); };
+    document.getElementById("btnZoomIn").onclick = () => { zoomLevel = Math.min(4.5, zoomLevel * 1.25); render(); };
+    document.getElementById("btnZoomOut").onclick = () => { zoomLevel = Math.max(0.3, zoomLevel / 1.25); render(); };
+
+    // MOUSE WHEEL ZOOM CENTERED AT CURSOR
+    mainCanvas.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 0.88 : 1.14;
+      zoomLevel = Math.max(0.3, Math.min(5.0, zoomLevel * delta));
+      render();
+    }, { passive: false });
+
+    // PAN DRAGGING
+    mainCanvas.addEventListener("mousedown", (e) => {
+      isDragging = true;
+      dragStartX = e.clientX;
+    });
+    window.addEventListener("mouseup", () => isDragging = false);
+    mainCanvas.addEventListener("mousemove", (e) => {
+      const rect = mainCanvas.getBoundingClientRect();
+      hoverMouseX = e.clientX - rect.left;
+      hoverMouseY = e.clientY - rect.top;
+
+      if (isDragging) {
+        const dx = e.clientX - dragStartX;
+        dragStartX = e.clientX;
+        panOffset += dx / (14 * zoomLevel);
+        render();
+      } else {
+        render();
+      }
+    });
+    mainCanvas.addEventListener("mouseleave", () => {
+      hoverMouseX = -1;
+      hoverMouseY = -1;
+      render();
+    });
+
+    // TIMELINE SCRUBBER
+    const scrubber = document.getElementById("timelineScrubber");
+    function formatTickTime(t) {
+      const base = 9 * 3600 + 30 * 60;
+      const total = (base + t) % 86400;
+      const h = Math.floor(total / 3600);
+      const m = Math.floor((total % 3600) / 60);
+      const s = total % 60;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    function updateScrubberBounds() {
+      if (!simData || !simData.clock) return;
+      const totalTicks = (simData.config && simData.config.total_ticks) ? simData.config.total_ticks : 1800;
+      scrubber.max = totalTicks;
+      if (!isDraggingScrubber) {
+        scrubber.value = simData.clock.tick;
+        document.getElementById("txtScrubTime").textContent = `${simData.clock.time_str} / ${formatTickTime(totalTicks)}`;
+      }
+    }
+
+    let isDraggingScrubber = false;
+    scrubber.addEventListener("mousedown", () => { isDraggingScrubber = true; });
+    window.addEventListener("mouseup", () => { isDraggingScrubber = false; });
+    scrubber.addEventListener("input", () => {
+      const targetTick = parseInt(scrubber.value);
+      document.getElementById("txtScrubTime").textContent = formatTickTime(targetTick);
+      if (simData && simData.candles) {
+        const tf = parseInt(document.getElementById("cfgTimeframe").value) || 60;
+        const targetIdx = Math.floor(targetTick / tf);
+        panOffset = Math.max(0, simData.candles.length - targetIdx - 6);
+        render();
+      }
+    });
+
+    // UPDATE UI PANELS
+    function updateUI() {
+      if (!simData) return;
+      const s = simData.statistics;
+      const ob = simData.order_book;
+      const clock = simData.clock;
+
+      // Clock
+      document.getElementById("txtClock").textContent = clock ? clock.time_str : "09:30:00";
+
+      // Ticker
+      const lastP = (s.last_price != null ? s.last_price : 100.0);
+      document.getElementById("tkPrice").textContent = lastP.toFixed(2);
+      document.getElementById("tkSpread").textContent = (ob.spread != null ? ob.spread.toFixed(2) : "--");
+
+      const delta = s.volume_delta || 0;
+      const deltaEl = document.getElementById("tkDelta");
+      deltaEl.textContent = (delta >= 0 ? "+" : "") + Math.round(delta).toLocaleString();
+      deltaEl.className = "hud-val " + (delta >= 0 ? "bull" : "bear");
+
+      document.getElementById("tkVol").textContent = Math.round(s.total_volume || 0).toLocaleString();
+      document.getElementById("tkBar").textContent = "#" + (s.candle_count || 0);
+
+      // Stats
+      document.getElementById("stReturn").textContent = (s.total_return_pct || 0).toFixed(2) + "%";
+      document.getElementById("stDrawdown").textContent = (s.max_drawdown_pct || 0).toFixed(2) + "%";
+      document.getElementById("stVol").textContent = (s.annualized_vol_pct || 0).toFixed(2) + "%";
+      document.getElementById("stBreaks").textContent = `${s.total_bos || 0} / ${s.total_choch || 0}`;
+      document.getElementById("stFVGs").textContent = `${s.active_fvgs || 0} / ${s.total_fvgs || 0}`;
+      document.getElementById("stSweeps").textContent = `${s.reversal_count || 0} / ${s.continuation_count || 0}`;
+      document.getElementById("stTrades").textContent = (s.total_trades || 0).toLocaleString();
+      document.getElementById("txtActiveCandles").textContent = `${s.candle_count || 0} candles`;
+
+      updateRegime();
+      renderDOM(ob, lastP);
+      renderEventFeed(simData.recent_events);
+    }
+
+    function updateRegime() {
+      const pillEl = document.getElementById("pillRegime");
+      const statEl = document.getElementById("stRegime");
+      const reg = simData && simData.statistics ? simData.statistics.current_regime : "range";
+      const cleanReg = (reg || "RANGE").replace(/_/g, " ").toUpperCase();
+
+      if (isRegimeRevealed) {
+        pillEl.innerHTML = `<span style="color:#60a5fa;">${cleanReg} 👁️</span>`;
+        statEl.innerHTML = `<span style="color:#60a5fa; font-weight:700;">${cleanReg}</span>`;
+      } else {
+        pillEl.innerHTML = `HIDDEN 🔒`;
+        statEl.innerHTML = `<span style="color:var(--text-muted); font-size:10px;">HIDDEN (CLICK TO REVEAL)</span>`;
+      }
+    }
+
+    function renderDOM(ob, lastP) {
+      if (!ob) return;
+      document.getElementById("domMid").textContent = `MID: ${ob.mid_price.toFixed(2)}`;
+      document.getElementById("domLastTrade").textContent = `LAST: ${lastP.toFixed(2)}`;
+      
+      const spTicks = Math.round((ob.spread || 0.02) / 0.01);
+      document.getElementById("domSpreadBadge").textContent = `SPREAD: ${(ob.spread != null ? ob.spread.toFixed(2) : "--")} (${spTicks} ticks)`;
+
+      let maxQ = 1.0;
+      (ob.asks || []).forEach(([p, q]) => maxQ = Math.max(maxQ, q));
+      (ob.bids || []).forEach(([p, q]) => maxQ = Math.max(maxQ, q));
+
+      let asksHtml = "";
+      const asks = (ob.asks || []).slice(0, 6);
+      for (let i = asks.length - 1; i >= 0; i--) {
+        const [p, q] = asks[i];
+        const barW = Math.round((q / maxQ) * 100);
+        asksHtml += `
+          <div class="dom-row ask">
+            <div class="bar" style="width: ${barW}%;"></div>
+            <span class="dom-price">${p.toFixed(2)}</span>
+            <span class="dom-size">${q.toFixed(1)}</span>
+          </div>`;
+      }
+      document.getElementById("domAsks").innerHTML = asksHtml;
+
+      let bidsHtml = "";
+      const bids = (ob.bids || []).slice(0, 6);
+      for (let i = 0; i < bids.length; i++) {
+        const [p, q] = bids[i];
+        const barW = Math.round((q / maxQ) * 100);
+        bidsHtml += `
+          <div class="dom-row bid">
+            <div class="bar" style="width: ${barW}%;"></div>
+            <span class="dom-price">${p.toFixed(2)}</span>
+            <span class="dom-size">${q.toFixed(1)}</span>
+          </div>`;
+      }
+      document.getElementById("domBids").innerHTML = bidsHtml;
+
+      // Imbalance Gauge
+      const totalB = bids.reduce((acc, cur) => acc + cur[1], 0);
+      const totalA = asks.reduce((acc, cur) => acc + cur[1], 0);
+      const imb = (totalB + totalA > 0) ? (totalB - totalA) / (totalB + totalA) : 0;
+      
+      const imbText = document.getElementById("txtImbalance");
+      imbText.textContent = (imb >= 0 ? "+" : "") + imb.toFixed(2);
+      imbText.style.color = imb >= 0 ? "var(--bull)" : "var(--bear)";
+
+      const ind = document.getElementById("imbIndicator");
+      if (imb >= 0) {
+        ind.style.left = "50%";
+        ind.style.width = (imb * 50) + "%";
+        ind.style.background = "var(--bull)";
+      } else {
+        const w = Math.abs(imb) * 50;
+        ind.style.left = (50 - w) + "%";
+        ind.style.width = w + "%";
+        ind.style.background = "var(--bear)";
+      }
+    }
+
+    function renderEventFeed(events) {
+      if (!events || events.length === 0) return;
+      const container = document.getElementById("eventList");
+      document.getElementById("eventCount").textContent = `${events.length} events`;
+      let html = "";
+      events.slice(-8).reverse().forEach(ev => {
+        html += `
+          <div class="event-item ${ev.sentiment}">
+            <div class="event-head">
+              <span class="event-title">${ev.title}</span>
+              <span class="event-time">${ev.time_str}</span>
+            </div>
+            <div class="event-detail">${ev.detail}</div>
+          </div>`;
+      });
+      container.innerHTML = html;
+    }
+
+    // 60 FPS HD CANVAS RENDER FUNCTION
+    function render() {
+      if (!simData || !simData.candles) return;
+      const candles = simData.candles;
+      const n = candles.length;
+      if (n === 0) return;
+
+      const w = mainCanvas.clientWidth;
+      const h = mainCanvas.clientHeight;
+      const vw = volCanvas.clientWidth;
+      const vh = volCanvas.clientHeight;
+
+      mCtx.clearRect(0, 0, w, h);
+      vCtx.clearRect(0, 0, vw, vh);
+
+      // Spacing & Visible Bounds
+      const candleW = Math.max(4, 15 * zoomLevel);
+      const candleStep = candleW * 1.38;
+      const rightPad = 70;
+
+      const visibleCount = Math.ceil(w / candleStep);
+      let startIndex = Math.max(0, Math.floor(n - visibleCount - panOffset));
+      let endIndex = Math.min(n, Math.ceil(startIndex + visibleCount + 3));
+      if (startIndex >= n) startIndex = Math.max(0, n - visibleCount);
+
+      // Price Range in visible window
+      let minP = Infinity;
+      let maxP = -Infinity;
+      for (let i = startIndex; i < endIndex; i++) {
+        const c = candles[i];
+        if (c.low < minP) minP = c.low;
+        if (c.high > maxP) maxP = c.high;
+      }
+      if (minP === Infinity || minP === maxP) {
+        minP = (candles[n - 1].close || 100.0) - 0.5;
+        maxP = (candles[n - 1].close || 100.0) + 0.5;
+      }
+
+      const pricePad = (maxP - minP) * 0.12 || 0.25;
+      minP -= pricePad;
+      maxP += pricePad;
+
+      function yPrice(p) {
+        return h - 30 - ((p - minP) / (maxP - minP)) * (h - 55);
+      }
+      function xIndex(idx) {
+        return (idx - startIndex) * candleStep + 20;
+      }
+
+      // 1. GRID LINES & PRICE SCALE
+      mCtx.strokeStyle = "rgba(255, 255, 255, 0.04)";
+      mCtx.lineWidth = 1;
+      const gridTicks = 6;
+      for (let i = 0; i <= gridTicks; i++) {
+        const p = minP + (i / gridTicks) * (maxP - minP);
+        const y = Math.floor(yPrice(p)) + 0.5;
+
+        mCtx.beginPath();
+        mCtx.moveTo(0, y);
+        mCtx.lineTo(w - rightPad, y);
+        mCtx.stroke();
+
+        mCtx.fillStyle = "#64748b";
+        mCtx.font = "10px monospace";
+        mCtx.textAlign = "left";
+        mCtx.fillText(p.toFixed(2), w - rightPad + 8, y + 3);
+      }
+
+      // 2. FAIR VALUE GAPS (FVG)
+      if (activeLayers.fvg && simData.fvgs) {
+        simData.fvgs.forEach(f => {
+          if (f.candle_3_index < startIndex - 8) return;
+          const yTop = yPrice(f.top_price);
+          const yBot = yPrice(f.bottom_price);
+          const xStart = xIndex(f.candle_1_index);
+          const xEnd = (f.status === "filled" && f.filled_candle_index) ? xIndex(f.filled_candle_index) : (w - rightPad);
+
+          if (xEnd < 0 || xStart > w) return;
+
+          const isBull = f.type === "bullish";
+          mCtx.fillStyle = isBull ? "rgba(16, 185, 129, 0.13)" : "rgba(244, 63, 94, 0.13)";
+          mCtx.strokeStyle = isBull ? "rgba(16, 185, 129, 0.45)" : "rgba(244, 63, 94, 0.45)";
+          mCtx.lineWidth = 1;
+
+          const top = Math.min(yTop, yBot);
+          const boxH = Math.max(2, Math.abs(yBot - yTop));
+          mCtx.fillRect(xStart, top, Math.max(12, xEnd - xStart), boxH);
+          mCtx.strokeRect(xStart, top, Math.max(12, xEnd - xStart), boxH);
+
+          mCtx.fillStyle = isBull ? "#10b981" : "#f43f5e";
+          mCtx.font = "9px sans-serif";
+          mCtx.fillText(`${isBull ? '▲' : '▼'} FVG (${f.fill_percentage}%)`, xStart + 4, top + 10);
+        });
+      }
+
+      // 3. LIQUIDITY ZONES (BSL & SSL)
+      if (activeLayers.liquidity && simData.liquidity_pools) {
+        const curPrice = simData.statistics.last_price || 100.0;
+        simData.liquidity_pools.slice(-8).forEach(p => {
+          const y = Math.floor(yPrice(p.price)) + 0.5;
+          const isBSL = p.type === "BSL";
+          const isNear = Math.abs(curPrice - p.price) <= 0.04;
+
+          mCtx.setLineDash([4, 4]);
+          mCtx.strokeStyle = isBSL ? (isNear ? "#e9d5ff" : "rgba(168, 85, 247, 0.65)") : (isNear ? "#fed7aa" : "rgba(249, 115, 22, 0.65)");
+          mCtx.lineWidth = isNear ? 1.8 : 1.2;
+          mCtx.beginPath();
+          mCtx.moveTo(0, y);
+          mCtx.lineTo(w - rightPad, y);
+          mCtx.stroke();
+          mCtx.setLineDash([]);
+
+          mCtx.fillStyle = isBSL ? "#c084fc" : "#fb923c";
+          mCtx.font = "9px sans-serif";
+          const status = p.is_swept ? `[SWEPT → ${(p.outcome || 'PENDING').toUpperCase()}]` : `[RESTING]`;
+          mCtx.fillText(`${p.type} ${p.price.toFixed(2)} ${status}`, 16, y - 4);
+        });
+      }
+
+      // 4. CANDLESTICKS (CONTINUOUS BODIES & INTRA-CANDLE ACTION)
+      let hoveredCandle = null;
+      if (activeLayers.candles) {
+        for (let i = startIndex; i < endIndex; i++) {
+          const c = candles[i];
+          const x = xIndex(i);
+          if (x < -20 || x > w) continue;
+
+          const isBull = c.close >= c.open;
+          const color = isBull ? "#10b981" : "#f43f5e";
+          const isLiveOpen = (i === n - 1);
+
+          const yOpen = yPrice(c.open);
+          const yClose = yPrice(c.close);
+          const yHigh = yPrice(c.high);
+          const yLow = yPrice(c.low);
+          const centerX = Math.floor(x + candleW / 2) + 0.5;
+
+          // Wick
+          mCtx.strokeStyle = color;
+          mCtx.lineWidth = 1.3;
+          mCtx.beginPath();
+          mCtx.moveTo(centerX, Math.floor(yHigh));
+          mCtx.lineTo(centerX, Math.floor(yLow));
+          mCtx.stroke();
+
+          // Body
+          mCtx.fillStyle = color;
+          const topY = Math.min(yOpen, yClose);
+          const bodyH = Math.max(1.8, Math.abs(yClose - yOpen));
+          mCtx.fillRect(Math.floor(x), Math.floor(topY), Math.floor(candleW), Math.floor(bodyH));
+
+          // If this is the active live open candle, draw live price tracer line!
+          if (isLiveOpen) {
+            const curY = Math.floor(yClose) + 0.5;
+            mCtx.strokeStyle = color;
+            mCtx.setLineDash([3, 3]);
+            mCtx.lineWidth = 1.2;
+            mCtx.beginPath();
+            mCtx.moveTo(x + candleW, curY);
+            mCtx.lineTo(w - rightPad, curY);
+            mCtx.stroke();
+            mCtx.setLineDash([]);
+
+            // Live Price Tag on right axis
+            mCtx.fillStyle = color;
+            mCtx.fillRect(w - rightPad, curY - 9, 65, 18);
+            mCtx.fillStyle = "#fff";
+            mCtx.font = "bold 10px monospace";
+            mCtx.fillText(c.close.toFixed(2), w - rightPad + 6, curY + 4);
+          }
+
+          // Hover
+          if (hoverMouseX >= x && hoverMouseX <= x + candleStep) {
+            hoveredCandle = c;
+          }
+        }
+      }
+
+      // 5. MARKET STRUCTURE (SWINGS, BOS, CHOCH)
+      if (activeLayers.structure && simData.swings) {
+        simData.swings.forEach(s => {
+          if (s.candle_index < startIndex || s.candle_index >= endIndex) return;
+          const x = xIndex(s.candle_index) + candleW / 2;
+          const y = yPrice(s.price);
+          const isHigh = s.type === "swing_high";
+
+          mCtx.fillStyle = isHigh ? "#38bdf8" : "#fb7185";
+          mCtx.beginPath();
+          mCtx.arc(x, y, 3, 0, Math.PI * 2);
+          mCtx.fill();
+
+          mCtx.font = "bold 9px sans-serif";
+          mCtx.textAlign = "center";
+          mCtx.fillText(s.label || (isHigh ? "SH" : "SL"), x, isHigh ? y - 7 : y + 13);
+        });
+
+        if (simData.structure_events) {
+          simData.structure_events.forEach(e => {
+            if (e.candle_index < startIndex || e.candle_index >= endIndex) return;
+            const y = Math.floor(yPrice(e.level_price)) + 0.5;
+            const xBreak = xIndex(e.candle_index) + candleW / 2;
+            const xStart = Math.max(0, xIndex(e.broken_swing_index));
+
+            const isChoch = e.event_type.includes("CHOCH");
+            mCtx.strokeStyle = isChoch ? "#f59e0b" : "#3b82f6";
+            mCtx.lineWidth = 1.4;
+            mCtx.setLineDash([3, 3]);
+            mCtx.beginPath();
+            mCtx.moveTo(xStart, y);
+            mCtx.lineTo(xBreak, y);
+            mCtx.stroke();
+            mCtx.setLineDash([]);
+
+            mCtx.fillStyle = isChoch ? "#f59e0b" : "#3b82f6";
+            mCtx.font = "bold 9px sans-serif";
+            mCtx.textAlign = "left";
+            mCtx.fillText(isChoch ? "CHoCH" : "BOS", xBreak + 4, y - 3);
+          });
+        }
+      }
+
+      // 6. CROSSHAIR & TOOLTIP HUD
+      if (hoverMouseX >= 0 && hoverMouseY >= 0 && hoverMouseX <= w - rightPad) {
+        mCtx.strokeStyle = "rgba(148, 163, 184, 0.35)";
+        mCtx.lineWidth = 1;
+        mCtx.setLineDash([2, 2]);
+
+        mCtx.beginPath();
+        mCtx.moveTo(hoverMouseX, 0);
+        mCtx.lineTo(hoverMouseX, h);
+        mCtx.stroke();
+
+        mCtx.beginPath();
+        mCtx.moveTo(0, hoverMouseY);
+        mCtx.lineTo(w - rightPad, hoverMouseY);
+        mCtx.stroke();
+        mCtx.setLineDash([]);
+
+        const hoverP = minP + ((h - 30 - hoverMouseY) / (h - 55)) * (maxP - minP);
+        mCtx.fillStyle = "#2563eb";
+        mCtx.fillRect(w - rightPad, hoverMouseY - 9, 65, 18);
+        mCtx.fillStyle = "#fff";
+        mCtx.font = "bold 10px monospace";
+        mCtx.textAlign = "left";
+        mCtx.fillText(hoverP.toFixed(2), w - rightPad + 6, hoverMouseY + 4);
+      }
+
+      const activeC = hoveredCandle || candles[candles.length - 1];
+      if (activeC) {
+        document.getElementById("hudTime").textContent = activeC.time_str || `#${activeC.index}`;
+        document.getElementById("hudO").textContent = activeC.open.toFixed(2);
+        document.getElementById("hudH").textContent = activeC.high.toFixed(2);
+        document.getElementById("hudL").textContent = activeC.low.toFixed(2);
+        document.getElementById("hudC").textContent = activeC.close.toFixed(2);
+        document.getElementById("hudBarVol").textContent = Math.round(activeC.volume);
+
+        const deltaEl = document.getElementById("hudBarDelta");
+        deltaEl.textContent = (activeC.delta >= 0 ? "+" : "") + Math.round(activeC.delta);
+        deltaEl.style.color = activeC.delta >= 0 ? "var(--bull)" : "var(--bear)";
+      }
+
+      // 7. VOLUME & DELTA SUBPANEL
+      if (activeLayers.volume) {
+        let maxVol = 1.0;
+        for (let i = startIndex; i < endIndex; i++) {
+          if (candles[i].volume > maxVol) maxVol = candles[i].volume;
+        }
+
+        // Horizontal baseline
+        vCtx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+        vCtx.lineWidth = 1;
+        vCtx.beginPath();
+        vCtx.moveTo(0, vh - 1);
+        vCtx.lineTo(vw - rightPad, vh - 1);
+        vCtx.stroke();
+
+        for (let i = startIndex; i < endIndex; i++) {
+          const c = candles[i];
+          const x = xIndex(i);
+          if (x < -20 || x > vw) continue;
+
+          const isBull = c.delta >= 0;
+          const vH = Math.max(2, (c.volume / maxVol) * (vh - 16));
+
+          vCtx.fillStyle = isBull ? "rgba(16, 185, 129, 0.8)" : "rgba(244, 63, 94, 0.8)";
+          vCtx.fillRect(Math.floor(x), Math.floor(vh - vH), Math.floor(candleW), Math.floor(vH));
+        }
+
+        // Volume scale label
+        vCtx.fillStyle = "#64748b";
+        vCtx.font = "9px monospace";
+        vCtx.textAlign = "left";
+        vCtx.fillText(Math.round(maxVol).toLocaleString(), vw - rightPad + 6, 14);
+      }
+    }
+
+    // INITIALIZATION
+    setSimulationDuration(1800);
+    updateCanvasSize();
+    initSim();
+  </script>
+</body>
+</html>
